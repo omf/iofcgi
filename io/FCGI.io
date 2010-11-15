@@ -5,6 +5,8 @@
  TODO:
 	- Check Role type
 	- Abort, Unknown, GetValues*
+	- decodeParams encodings
+	- Buffered streams
 	- EndRequests's FCGI_CANT_MPX_CONN, FCGI_OVERLOADED, FCGI_UNKNOWN_ROLE responses
 	- Run as CGI
 	- Run as server (with unix socket and tcp socket)
