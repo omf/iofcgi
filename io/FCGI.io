@@ -145,8 +145,10 @@ FCGIRecord := Object clone do(
 
 FCGIInputStream := Object clone do(
 
+	eof ::= false
+
 	init := method(
-		self buffer := ""
+		self buffer := Sequence clone
 		self
 	)
 
@@ -162,19 +164,24 @@ FCGIInputStream := Object clone do(
 	)
 
 	read := method(count,
+		debugLine("[FCGI InputStream] reading " .. count .. " ...")
 
-		while(avail < count,
-			conn read
+		while(avail < count and eof not,
+			self connection read
 		)
 
-		s := buffer exSlice(0, count)
-		buffer removeSlice(0, count - 1)
+		if(avail < count, count = avail)
+
+		s := self buffer exSlice(0, count)
+		self buffer removeSlice(0, count - 1)
 
 		s
 	)
 
 	append := method(data,
-		buffer appendSeq(data)
+		debugLine("[FCGI InputStream] appending ...")
+		self buffer appendSeq(data)
+		debugLine("[FCGI InputStream] ... appending")
 	)
 )
 
@@ -205,10 +212,10 @@ FCGIRequest := Object clone do(
 	with := method(conn,
 		this := FCGIRequest clone
 		this env := Map clone
-		this stdin := FCGIInputStream with(conn, self)
-		this stdout := FCGIOutputStream with(conn, self)
-		this stderr := FCGIOutputStream with(conn, self) setStreamType(FCGI_STDERR)
-		this data := FCGIInputStream with(conn, self)
+		this stdin := FCGIInputStream with(conn, this)
+		this stdout := FCGIOutputStream with(conn, this)
+		this stderr := FCGIOutputStream with(conn, this) setStreamType(FCGI_STDERR)
+		this data := FCGIInputStream with(conn, this)
 		this connection := conn
 		this
 	)
@@ -216,7 +223,7 @@ FCGIRequest := Object clone do(
 	run := method(
 		debugLine("[FCGI Request] run ...")
 
-		result := self connection server getSlot("application") call(self)
+		result := self connection server application(self)
 
 		debugLine("[FCGI Request] ... run")
 
@@ -226,7 +233,6 @@ FCGIRequest := Object clone do(
 
 FCGIConnection := Object clone do(
 
-	requests := Map clone
 	commands := Map with(FCGI_BEGIN_REQUEST asString, "_beginRequestCommand",
 				FCGI_ABORT_REQUEST asString, "_abortRequestCommand",
 				FCGI_PARAMS asString, "_paramsCommand",
@@ -238,6 +244,7 @@ FCGIConnection := Object clone do(
 		this := FCGIConnection clone
 		this socket := socket
 		this server := server 
+		this requests := Map clone
 		this
 	)
 
@@ -267,8 +274,10 @@ FCGIConnection := Object clone do(
 			req := self performWithArgList(commands at(rec recordType asString), list(rec))
 
 			if(req isKindOf(FCGIRequest),
+
 				endReqBody := req run
 				endRequest(req id, endReqBody)
+
 				if((req flags & FCGI_KEEP_CONN) == 0,
 					self close
 				)
@@ -361,6 +370,8 @@ FCGIConnection := Object clone do(
 
 			if(rec contentData isNil not,
 				decodeParams(req, rec contentData)
+			,
+				return req
 			)
 		)
 		debugLine("[FCGI Connection] ... PARAMS")
@@ -375,7 +386,7 @@ FCGIConnection := Object clone do(
 		if(rec contentLength > 0,
 			req stdin append(rec contentData)
 		,
-			return req
+			req stdin setEof(true)
 		)
 		debugLine("[FCGI Connection] ... STDIN")
 		self
