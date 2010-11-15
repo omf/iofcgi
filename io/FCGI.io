@@ -370,6 +370,12 @@ FCGIConnection := Object clone do(
 
 			if(rec contentData isNil not,
 				decodeParams(req, rec contentData)
+				if(req env at("PATH_INFO") isEmpty,
+					req env atPut("PATH_INFO", req env at("REQUEST_URI") beforeSeq("?"))
+				)
+				if(req env at("QUERY_STRING") isEmpty,
+					req env atPut("QUERY_STRING", req env at("REQUEST_URI") afterSeq("?"))
+				)
 			,
 				return req
 			)

@@ -34,7 +34,7 @@ srv := FCGIServer clone do(
 		)
 
 		if(req env at("REQUEST_METHOD") == "GET",
-			s := req env at("REQUEST_URI")
+			s := req env at("QUERY_STRING")
 		)
 
 		debugLine(s)
