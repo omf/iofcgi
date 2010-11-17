@@ -410,6 +410,8 @@ FCGIConnection := Object clone do(
 
 		if(rec contentLength > 0,
 			req data append(rec contentData)
+		,
+			req data setEof(true)
 		)
 		debugLine("[FCGI Connection] ... DATA")
 		self
