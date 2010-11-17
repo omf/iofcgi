@@ -3,7 +3,6 @@
  Io FastCGI
 
  TODO:
-	- Check Role type
 	- Abort, Unknown, GetValues*
 	- decodeParams encodings
 	- Buffered streams
@@ -225,11 +224,13 @@ FCGIRequest := Object clone do(
 	run := method(
 		debugLine("[FCGI Request] run ...")
 
-		result := self connection server application(self)
+		status := self connection server application(self)
+
+		if(status isKindOf(Number) not, status = 0)
 
 		debugLine("[FCGI Request] ... run")
 
-		Sequence clone pack(FCGIEndRequestBodyFormat, 0, FCGI_REQUEST_COMPLETE)
+		status
 	)
 )
 
@@ -273,20 +274,21 @@ FCGIConnection := Object clone do(
 		if(rec isError not,
 			debugLine("[FCGI Connection] exec'ing ...")
 
-			req := self performWithArgList(commands at(rec recordType asString), list(rec))
-
-			if(req isKindOf(FCGIRequest),
-
-				endReqBody := req run
-				endRequest(req id, endReqBody)
-
-				if((req flags & FCGI_KEEP_CONN) == 0,
-					self close
-				)
+			type := commands at(rec recordType asString)
+			if(type isNil,
+				self unknownType(rec)
 			,
-				if(req isNil,
-					req println
-					self unknownType(rec)
+				req := self performWithArgList(type, list(rec))
+
+				if(req isKindOf(FCGIRequest),
+					appStatus := 0
+					protocolStatus := FCGI_REQUEST_COMPLETE
+
+					if(req role != FCGI_RESPONDER, protocolStatus = FCGI_UNKNOWN_ROLE, appStatus = req run)
+
+					endRequest(req, appStatus, protocolStatus)
+
+					if((req flags & FCGI_KEEP_CONN) == 0, self close)
 				)
 			)
 
@@ -305,13 +307,14 @@ FCGIConnection := Object clone do(
 		debugLine("[FCGI Connection] ... closed")
 	)
 
-	endRequest := method(reqId, endReqBody,
+	endRequest := method(req, appStatus, protocolStatus,
 		debugLine("[FCGI Connection] END_REQUEST ...")
 
-		endRec := FCGIRecord clone setVersion(FCGI_VERSION_1) setRecordType(FCGI_END_REQUEST) setRequestId(reqId) setContentLength(endReqBody size) setPaddingLength(0) setContentData(endReqBody)
+		endReqBody := Sequence clone pack(FCGIEndRequestBodyFormat, appStatus, protocolStatus)
+		endRec := FCGIRecord clone setVersion(FCGI_VERSION_1) setRecordType(FCGI_END_REQUEST) setRequestId(req id) setContentLength(endReqBody size) setPaddingLength(0) setContentData(endReqBody)
 		endRec write(self socket)
 
-		self requests removeAt(reqId asString)
+		self requests removeAt(req id asString)
 
 		debugLine("[FCGI Connection] ... END_REQUEST")
 

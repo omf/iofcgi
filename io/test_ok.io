@@ -55,6 +55,8 @@ srv := FCGIServer clone do(
 
 		req stdout write("</body></html>")
 		req stdout write("")
+
+		0
 	)
 
 )
