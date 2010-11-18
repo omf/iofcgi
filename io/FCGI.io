@@ -71,6 +71,11 @@ FCGIEndRequestBodyFormat := "*ICC3"
 FCGIUnknownTypeBodyFormat := "*CC7"
 
 
+FCGISocketError := Error clone do(
+	record ::= nil
+)
+
+
 FCGIRecord := Object clone do(
 	version ::= 0
 	recordType ::= 0
@@ -106,6 +111,8 @@ FCGIRecord := Object clone do(
 			)
 
 			return this
+		,
+			Exception raise(FCGISocketError with(buf message) setRecord(self))
 		)
 
 		buf
@@ -125,6 +132,7 @@ FCGIRecord := Object clone do(
 			if(self contentLength > 0,
 				if(socket write(self contentData) isError,
 					debugLine("[FCGI Record] ERROR 2")
+					Exception raise(FCGISocketError with("Socket write error") setRecord(self))
 				,
 					if(self paddingLength > 0,
 						debugLine("[FCGI Record] ... padding (" .. self paddingLength .. ") ...")
@@ -135,6 +143,7 @@ FCGIRecord := Object clone do(
 			)
 		,
 			debugLine("[FCGI Record] ERROR 1")
+			Exception raise(FCGISocketError with("Socket write error") setRecord(self))
 		)
 		
 		debugLine("[FCGI Record] ... written")
@@ -257,7 +266,12 @@ FCGIConnection := Object clone do(
 		loop(
 			if(self socket isOpen,
 				debugLine("[FCGI Connection] ... read ...")
-				self read
+				e := try( self read )
+				if(e,
+					debugLine("[FCGI Connection] EXCEPTION #{e error message} at #{e error location}" interpolate)
+					self socket close
+					break
+				)
 			,
 				debugLine("[FCGI Connection] OUT ...")
 				break
@@ -299,7 +313,6 @@ FCGIConnection := Object clone do(
 
 		rec
 	)
-
 
 	close := method(
 		debugLine("[FCGI Connection] closing ...")
@@ -361,6 +374,8 @@ FCGIConnection := Object clone do(
 
 	_abortRequestCommand := method(rec,
 		debugLine("[FCGI Connection] ABORT ...")
+
+		endRequest(self requests at(rec requestId asString), 0, FCGI_REQUEST_COMPLETE)
 
 		debugLine("[FCGI Connection] ... ABORT")
 	)
