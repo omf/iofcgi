@@ -1,10 +1,8 @@
-
 /*
  Io FastCGI
 
  TODO:
-	- Abort, Unknown, GetValues*
-	- decodeParams encodings
+	- GetValues*
 	- Buffered streams
 	- EndRequests's FCGI_CANT_MPX_CONN, FCGI_OVERLOADED, FCGI_UNKNOWN_ROLE responses
 	- Run as CGI
@@ -58,11 +56,6 @@ FCGI_REQUEST_COMPLETE	:=	0
 FCGI_CANT_MPX_CONN	:=	1
 FCGI_OVERLOADED		:=	2
 FCGI_UNKNOWN_ROLE	:=	3
-
-FCGI_MAX_CONNS		:=	"FCGI_MAX_CONNS"
-FCGI_MAX_REQS		:=	"FCGI_MAX_REQS"
-FCGI_MPXS_CONNS		:=	"FCGI_MPXS_CONNS"
-
 
 
 FCGIHeaderFormat := "*CCSSCC"
@@ -389,7 +382,8 @@ FCGIConnection := Object clone do(
 			debugLine("[FCGI Connection] " .. req asString)
 
 			if(rec contentData isNil not,
-				decodeParams(req, rec contentData)
+				req env empty mergeInPlace(decodeParams(rec contentData))
+
 				if(req env at("PATH_INFO") isEmpty,
 					req env atPut("PATH_INFO", req env at("REQUEST_URI") beforeSeq("?"))
 				)
@@ -437,35 +431,62 @@ FCGIConnection := Object clone do(
 		debugLine("[FCGI Connection] ... GET_VALUES")
 	)
 
-	//TODO there are more encondings!!
-	decodeParams := method(req, data,
+	decodeParams := method(data,
 		next := 0
 		kLen := 0
 		vLen := 0
 		k := nil
 		v := nil
+		off := 1
+		params := Map clone
 
 		while(next < data size,
+			v = ""
+			off = 1
+			
 			kLen = data at(next)
-			vLen = data at(next + 1)
+			if((kLen & 0x80) == 1,
+				kLen = ((kLen & 0x7f) << 24)
+				kLen = kLen + (data at(next + 1) << 16)
+				kLen = kLen + (data at(next + 2) << 8)
+				kLen = kLen + data at(next + 3)
+				off = 4
+			)
+			vLen = data at(next + off)
+			if((vLen & 0x80) == 1,
+				vLen = ((vLen & 0x7f) << 24)
+				vLen = vLen + (data at(next + 1) << 16)
+				vLen = vLen + (data at(next + 2) << 8)
+				vLen = vLen + data at(next + 3)
+				off = off + 4
+			,
+				off = off + 1
+			)
 
-			next = next + 2 + kLen
+			next = next + off + kLen
 			k = data exSlice(next - kLen, next)
-			v = data exSlice(next, next + vLen)
+			if(vLen, v = data exSlice(next, next + vLen))
 
 			debugLine(next .. " param " .. k .. "=" .. v)
 
-			req env atPut(k, v)
+			params atPut(k, v)
 
 			next = next + vLen
 		)
 
-		debugLine(req asString)
-
+		params
 	)
 )
 
 FCGIServer := Object clone do(
+
+	params := Map with("FCGI_MAX_CONNS", 50,
+			   "FCGI_MAX_REQS", 1,
+			   "FCGI_MPXS_CONNS", false)
+
+	setMaxConns := method(maxConns, params atPut("FCGI_MAX_CONNS", maxConns) ; self)
+	setMaxReqs := method(self)
+	setMultiplexed := method(self)
 
 	application := method(request, "Must provide an application(request) method to be executed by the server!!" ; exit )
 

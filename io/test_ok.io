@@ -41,6 +41,8 @@ srv := FCGIServer clone do(
 		m := CGI parseString(s)
 
 
+		//wait(10)
+
 		req stdout write("Status: 200 OK\r\nContent-Type: text/html\r\n\r\n")
 		req stdout write("<html><head><title>testcgi</title></head><body>")
 		req stdout write("")
