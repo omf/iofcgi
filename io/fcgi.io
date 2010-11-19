@@ -78,22 +78,25 @@ Sequence fcgiDecodePairs := method(
 		off = 1
 
 		kLen = self at(next)
-		if((kLen & 0x80) == 1,
+		if((kLen & 0x80) == 0x80,
 			kLen = ((kLen & 0x7f) << 24)
 			kLen = kLen + (self at(next + 1) << 16)
 			kLen = kLen + (self at(next + 2) << 8)
 			kLen = kLen + self at(next + 3)
 			off = 4
 		)
-		vLen = self at(next + off)
-		if((vLen & 0x80) == 1,
+			
+		next = next + off
+		
+		vLen = self at(next)
+		if((vLen & 0x80) == 0x80,
 			vLen = ((vLen & 0x7f) << 24)
 			vLen = vLen + (self at(next + 1) << 16)
 			vLen = vLen + (self at(next + 2) << 8)
 			vLen = vLen + self at(next + 3)
-			off = off + 4
+			off = 4
 		,
-			off = off + 1
+			off = 1
 		)
 
 		next = next + off + kLen
@@ -501,15 +504,14 @@ FCGIConnection := Object clone do(
 	_getValuesCommand := method(rec,
 		debugLine("[FCGI Connection] GET_VALUES ...")
 
-		m := rec contentData fcgiDecodePairs
+		pairs := Map clone
 		p := self server params
 		
-		nm := Map clone
-		m foreach(k, v, if(p keys contains(k), nm atPut(k, p at(k))))
-
-		s := nm fcgiEncodePairs
+		rec contentData fcgiDecodePairs foreach(k, v, if(p keys contains(k), pairs atPut(k, p at(k))))
 		
-		resp := FCGIRecord clone setVersion(FCGI_VERSION_1) setRecordType(FCGI_GET_VALUES_RESULT) setRequestId(FCGI_NULL_REQUEST_ID) setContentLength(s size) setContentData(s)
+		pairsSeq := pairs fcgiEncodePairs
+		
+		resp := FCGIRecord clone setVersion(FCGI_VERSION_1) setRecordType(FCGI_GET_VALUES_RESULT) setRequestId(FCGI_NULL_REQUEST_ID) setContentLength(pairsSeq size) setContentData(pairsSeq)
 		resp write(self socket)
 
 		debugLine("[FCGI Connection] ... GET_VALUES")
@@ -551,8 +553,8 @@ FCGIServer := Object clone do(
 
 		debugLine(socket isOpen asString)
 
+		newSocket := nil
 		loop(
-			newSocket := nil
 			loop(
 				debugLine("[FCGI Server] accepting ...")
 				newSocket = socket serverWaitForConnection
