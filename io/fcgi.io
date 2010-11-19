@@ -100,7 +100,7 @@ Sequence fcgiDecodePairs := method(
 		k = self exSlice(next - kLen, next)
 		if(vLen, v = self exSlice(next, next + vLen))
 
-		debugLine(next .. " param " .. k .. "=" .. v)
+		//debugLine(next .. " param " .. k .. "=" .. v)
 
 		params atPut(k, v)
 
@@ -159,7 +159,7 @@ FCGIRecord := Object clone do(
 			FCGIException setRecord(self) setSocketError(buf) raise("Record read")
 		)
 
-		buf foreach(v, debugLine(v asHex))
+		//buf foreach(v, debugLine(v asHex))
 
 		s := buf unpack(FCGIHeaderFormat)
 
@@ -170,7 +170,7 @@ FCGIRecord := Object clone do(
 		this setContentLength(s at(3))
 		this setPaddingLength(s at(4))
 
-		debugLine("[FCGI Record] read header: " .. this asString)
+		//debugLine("[FCGI Record] read header: " .. this asString)
 
 		if(this contentLength > 0,
 			this contentData = socket readBytes(this contentLength)
@@ -190,27 +190,28 @@ FCGIRecord := Object clone do(
 
 		hdr := self header
 
-		hdr foreach(v, debugLine(v asHex))
-		self contentData foreach(v, debugLine(v asHex))
+		//hdr foreach(v, debugLine(v asHex))
+		//self contentData foreach(v, debugLine(v asHex))
 
 		e := socket write(hdr)
-		if(e isError not,
-			if(self contentLength > 0,
-				e = socket write(self contentData)
-				if(e isError not,
-					if(self paddingLength > 0,
-						debugLine("[FCGI Record] ... padding (" .. self paddingLength .. ") ...")
-						s := Sequence clone setSize(self paddingLength)
-						socket write(s)
-					)
-				,
-					debugLine("[FCGI Record] ERROR 2")
-					FCGIException setRecord(self) setSocketError(e) raise("Record write content data")
+		if(e isError,
+			FCGIException setRecord(self) setSocketError(e) raise("Record write header")
+		)
+
+		if(self contentLength > 0,
+			e = socket write(self contentData)
+			if(e isError,
+				FCGIException setRecord(self) setSocketError(e) raise("Record write content data")
+			)
+				
+			if(self paddingLength > 0,
+				debugLine("[FCGI Record] ... padding (" .. self paddingLength .. ") ...")
+				s := Sequence clone setSize(self paddingLength)
+				e = socket write(s)
+				if(e isError,
+					FCGIException setRecord(self) setSocketError(e) raise("Record write padding data")
 				)
 			)
-		,
-			debugLine("[FCGI Record] ERROR 1")
-			FCGIException setRecord(self) setSocketError(e) raise("Record write header")
 		)
 		
 		debugLine("[FCGI Record] ... written")
@@ -419,7 +420,7 @@ FCGIConnection := Object clone do(
 
 	_beginRequestCommand := method(rec,
 		debugLine("[FCGI Connection] BEGIN_REQUEST ...")
-		debugLine("[FCGI Connection] " .. rec contentData asString)
+		//debugLine("[FCGI Connection] " .. rec contentData asString)
 
 		br := rec contentData unpack(FCGIBeginRequestBodyFormat)
 		req := FCGIRequest with(self)
@@ -443,11 +444,11 @@ FCGIConnection := Object clone do(
 
 	_paramsCommand := method(rec,
 		debugLine("[FCGI Connection] PARAMS ...")
-		debugLine("[FCGI Connection] " .. rec asString)
+		//debugLine("[FCGI Connection] " .. rec asString)
 
 		if(self requests size > 0,
 			req := self requests at(rec requestId asString)
-			debugLine("[FCGI Connection] " .. req asString)
+			//debugLine("[FCGI Connection] " .. req asString)
 
 			if(rec contentData isNil not,
 				params := rec contentData fcgiDecodePairs
@@ -539,7 +540,11 @@ FCGIServer := Object clone do(
 		while(socket isError or socket isNil,
 			wait(0.1)
 			socket = Socket fromFd(FCGI_LISTENSOCK_FILENO, AddressFamily AF_UNIX)
-			if(socket isError, debugLine(socket message), break)
+			if(socket isError,
+				debugLine(socket message)
+			,
+				break
+			)
 		)
 
 		debugLine(socket isOpen asString)
