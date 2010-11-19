@@ -137,10 +137,9 @@ Map fcgiEncodePairs := method(
 )
 
 
-
-
-FCGISocketError := Error clone do(
+FCGIException := Exception clone do(
 	record ::= nil
+	socketError ::= Error clone
 )
 
 
@@ -156,34 +155,32 @@ FCGIRecord := Object clone do(
 		debugLine("[FCGI Record] reading ...")
 
 		buf := socket readBytes(FCGI_HEADER_LEN)
-		if(buf isError not,
-			buf foreach(v, debugLine(v asHex))
-
-			s := buf unpack(FCGIHeaderFormat)
-
-			this := FCGIRecord clone
-			this setVersion(s at(0))
-			this setRecordType(s at(1))
-			this setRequestId(s at(2))
-			this setContentLength(s at(3))
-			this setPaddingLength(s at(4))
-
-			debugLine("[FCGI Record] read header: " .. this asString)
-
-			if(this contentLength > 0,
-				this contentData = socket readBytes(this contentLength)
-			)
-
-			if(this paddingLength > 0,
-				socket readBytes(this paddingLength)
-			)
-
-			return this
-		,
-			Exception raise(FCGISocketError with(buf message) setRecord(self))
+		if(buf isError,
+			FCGIException setRecord(self) setSocketError(buf) raise("Record read")
 		)
 
-		buf
+		buf foreach(v, debugLine(v asHex))
+
+		s := buf unpack(FCGIHeaderFormat)
+
+		this := FCGIRecord clone
+		this setVersion(s at(0))
+		this setRecordType(s at(1))
+		this setRequestId(s at(2))
+		this setContentLength(s at(3))
+		this setPaddingLength(s at(4))
+
+		debugLine("[FCGI Record] read header: " .. this asString)
+
+		if(this contentLength > 0,
+			this contentData = socket readBytes(this contentLength)
+		)
+
+		if(this paddingLength > 0,
+			socket readBytes(this paddingLength)
+		)
+
+		this
 	)
 
 
@@ -196,22 +193,24 @@ FCGIRecord := Object clone do(
 		hdr foreach(v, debugLine(v asHex))
 		self contentData foreach(v, debugLine(v asHex))
 
-		if(socket write(hdr) isError not,
+		e := socket write(hdr)
+		if(e isError not,
 			if(self contentLength > 0,
-				if(socket write(self contentData) isError,
-					debugLine("[FCGI Record] ERROR 2")
-					Exception raise(FCGISocketError with("Socket write error") setRecord(self))
-				,
+				e = socket write(self contentData)
+				if(e isError not,
 					if(self paddingLength > 0,
 						debugLine("[FCGI Record] ... padding (" .. self paddingLength .. ") ...")
 						s := Sequence clone setSize(self paddingLength)
 						socket write(s)
 					)
+				,
+					debugLine("[FCGI Record] ERROR 2")
+					FCGIException setRecord(self) setSocketError(e) raise("Record write content data")
 				)
 			)
 		,
 			debugLine("[FCGI Record] ERROR 1")
-			Exception raise(FCGISocketError with("Socket write error") setRecord(self))
+			FCGIException setRecord(self) setSocketError(e) raise("Record write header")
 		)
 		
 		debugLine("[FCGI Record] ... written")
@@ -329,7 +328,7 @@ FCGIConnection := Object clone do(
 				debugLine("[FCGI Connection] ... read ...")
 				e := try( self read )
 				if(e,
-					debugLine("[FCGI Connection] EXCEPTION #{e error message} at #{e error location}" interpolate)
+					debugLine("[FCGI Connection] EXCEPTION #{e error} [#{e socketError message}]" interpolate)
 					self socket close
 					break
 				)
