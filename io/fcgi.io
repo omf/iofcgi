@@ -524,7 +524,7 @@ FCGIServer := Object clone do(
 	maxConns := method(params at("FCGI_MAX_CONNS"))
 	setMaxConns := method(maxConns, params atPut("FCGI_MAX_CONNS", maxConns) ; self)
 	
-	maxReqs :=  := method(params at("FCGI_MAX_REQS"))
+	maxReqs := method(params at("FCGI_MAX_REQS"))
 	setMaxReqs := method(self)
 
 	isMultiplexed := method(params at("FCGI_MPXS_CONNS"))

@@ -1,6 +1,6 @@
 #!/usr/local/bin/io
 
-doRelativeFile("FCGI.io")
+doRelativeFile("fcgi.io")
 
 //l := initDebug("/tmp/kk_" .. System thisProcessPid .. ".log")
 l := initDebug("/tmp/kk.log")
