@@ -2,9 +2,8 @@
  Io FastCGI
 
  TODO:
-	- GetValues*
 	- Buffered streams
-	- EndRequests's FCGI_CANT_MPX_CONN, FCGI_OVERLOADED, FCGI_UNKNOWN_ROLE responses
+	- EndRequests's FCGI_CANT_MPX_CONN, FCGI_OVERLOADED responses
 	- Run as CGI
 	- Run as server (with unix socket and tcp socket)
 	- Multiplexing
@@ -62,6 +61,82 @@ FCGIHeaderFormat := "*CCSSCC"
 FCGIBeginRequestBodyFormat := "*SCC5"
 FCGIEndRequestBodyFormat := "*ICC3"
 FCGIUnknownTypeBodyFormat := "*CC7"
+
+
+
+Sequence fcgiDecodePairs := method(
+	next := 0
+	kLen := 0
+	vLen := 0
+	k := nil
+	v := nil
+	off := 1
+	params := Map clone
+
+	while(next < self size,
+		v = ""
+		off = 1
+
+		kLen = self at(next)
+		if((kLen & 0x80) == 1,
+			kLen = ((kLen & 0x7f) << 24)
+			kLen = kLen + (self at(next + 1) << 16)
+			kLen = kLen + (self at(next + 2) << 8)
+			kLen = kLen + self at(next + 3)
+			off = 4
+		)
+		vLen = self at(next + off)
+		if((vLen & 0x80) == 1,
+			vLen = ((vLen & 0x7f) << 24)
+			vLen = vLen + (self at(next + 1) << 16)
+			vLen = vLen + (self at(next + 2) << 8)
+			vLen = vLen + self at(next + 3)
+			off = off + 4
+		,
+			off = off + 1
+		)
+
+		next = next + off + kLen
+		k = self exSlice(next - kLen, next)
+		if(vLen, v = self exSlice(next, next + vLen))
+
+		debugLine(next .. " param " .. k .. "=" .. v)
+
+		params atPut(k, v)
+
+		next = next + vLen
+	)
+
+	params
+)
+
+
+Map fcgiEncodePairs := method(
+	s := Sequence clone setItemType("uint8") setEncoding("number")
+
+	self foreach(k, v,
+		kLen := k size
+		vLen := v size
+		if(kLen > 255,
+			s appendSeq(Sequence pack("*I", kLen | 0x80000000))
+		,
+			s append(kLen)
+		)
+
+		if(vLen > 255,
+			s appendSeq(Sequence pack("*I", vLen | 0x80000000))
+		,
+			s append(vLen)
+		)
+
+		s appendSeq(k)
+		s appendSeq(v)
+	)
+
+	s
+)
+
+
 
 
 FCGISocketError := Error clone do(
@@ -238,13 +313,6 @@ FCGIRequest := Object clone do(
 
 FCGIConnection := Object clone do(
 
-	commands := Map with(FCGI_BEGIN_REQUEST asString, "_beginRequestCommand",
-				FCGI_ABORT_REQUEST asString, "_abortRequestCommand",
-				FCGI_PARAMS asString, "_paramsCommand",
-				FCGI_STDIN asString, "_stdinCommand",
-				FCGI_DATA asString, "_dataCommand",
-				FCGI_GET_VALUES asString, "_getValuesCommand")
-
 	with := method(socket, server,
 		this := FCGIConnection clone
 		this socket := socket
@@ -281,7 +349,7 @@ FCGIConnection := Object clone do(
 		if(rec isError not,
 			debugLine("[FCGI Connection] exec'ing ...")
 
-			type := commands at(rec recordType asString)
+			type := _commands at(rec recordType asString)
 			if(type isNil,
 				self unknownType(rec)
 			,
@@ -340,13 +408,14 @@ FCGIConnection := Object clone do(
 		self
 	)
 
-	getValuesResult := method(rec,
-		debugLine("[FCGI Connection] GET_VALUES_RESULT ...")
-		debugLine("[FCGI Connection] ... GET_VALUES_RESULT")
-	)
 
 
-
+	_commands := Map with(FCGI_BEGIN_REQUEST asString, "_beginRequestCommand",
+				FCGI_ABORT_REQUEST asString, "_abortRequestCommand",
+				FCGI_PARAMS asString, "_paramsCommand",
+				FCGI_STDIN asString, "_stdinCommand",
+				FCGI_DATA asString, "_dataCommand",
+				FCGI_GET_VALUES asString, "_getValuesCommand")
 
 
 	_beginRequestCommand := method(rec,
@@ -382,14 +451,16 @@ FCGIConnection := Object clone do(
 			debugLine("[FCGI Connection] " .. req asString)
 
 			if(rec contentData isNil not,
-				req env empty mergeInPlace(decodeParams(rec contentData))
+				params := rec contentData fcgiDecodePairs
+				
+				if(params at("PATH_INFO") isEmpty,
+					params atPut("PATH_INFO", params at("REQUEST_URI") beforeSeq("?"))
+				)
+				if(params at("QUERY_STRING") isEmpty,
+					params atPut("QUERY_STRING", params at("REQUEST_URI") afterSeq("?"))
+				)
 
-				if(req env at("PATH_INFO") isEmpty,
-					req env atPut("PATH_INFO", req env at("REQUEST_URI") beforeSeq("?"))
-				)
-				if(req env at("QUERY_STRING") isEmpty,
-					req env atPut("QUERY_STRING", req env at("REQUEST_URI") afterSeq("?"))
-				)
+				req env empty mergeInPlace(params)
 			,
 				return req
 			)
@@ -428,53 +499,19 @@ FCGIConnection := Object clone do(
 
 	_getValuesCommand := method(rec,
 		debugLine("[FCGI Connection] GET_VALUES ...")
+
+		m := rec contentData fcgiDecodePairs
+		p := self server params
+		
+		nm := Map clone
+		m foreach(k, v, if(p keys contains(k), nm atPut(k, p at(k))))
+
+		s := nm fcgiEncodePairs
+		
+		resp := FCGIRecord clone setVersion(FCGI_VERSION_1) setRecordType(FCGI_GET_VALUES_RESULT) setRequestId(FCGI_NULL_REQUEST_ID) setContentLength(s size) setContentData(s)
+		resp write(self socket)
+
 		debugLine("[FCGI Connection] ... GET_VALUES")
-	)
-
-	decodeParams := method(data,
-		next := 0
-		kLen := 0
-		vLen := 0
-		k := nil
-		v := nil
-		off := 1
-		params := Map clone
-
-		while(next < data size,
-			v = ""
-			off = 1
-			
-			kLen = data at(next)
-			if((kLen & 0x80) == 1,
-				kLen = ((kLen & 0x7f) << 24)
-				kLen = kLen + (data at(next + 1) << 16)
-				kLen = kLen + (data at(next + 2) << 8)
-				kLen = kLen + data at(next + 3)
-				off = 4
-			)
-			vLen = data at(next + off)
-			if((vLen & 0x80) == 1,
-				vLen = ((vLen & 0x7f) << 24)
-				vLen = vLen + (data at(next + 1) << 16)
-				vLen = vLen + (data at(next + 2) << 8)
-				vLen = vLen + data at(next + 3)
-				off = off + 4
-			,
-				off = off + 1
-			)
-
-			next = next + off + kLen
-			k = data exSlice(next - kLen, next)
-			if(vLen, v = data exSlice(next, next + vLen))
-
-			debugLine(next .. " param " .. k .. "=" .. v)
-
-			params atPut(k, v)
-
-			next = next + vLen
-		)
-
-		params
 	)
 )
 
@@ -484,8 +521,13 @@ FCGIServer := Object clone do(
 			   "FCGI_MAX_REQS", 1,
 			   "FCGI_MPXS_CONNS", false)
 
+	maxConns := method(params at("FCGI_MAX_CONNS"))
 	setMaxConns := method(maxConns, params atPut("FCGI_MAX_CONNS", maxConns) ; self)
+	
+	maxReqs :=  := method(params at("FCGI_MAX_REQS"))
 	setMaxReqs := method(self)
+
+	isMultiplexed := method(params at("FCGI_MPXS_CONNS"))
 	setMultiplexed := method(self)
 
 	application := method(request, "Must provide an application(request) method to be executed by the server!!" ; exit )
