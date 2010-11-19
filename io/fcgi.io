@@ -363,6 +363,7 @@ FCGIConnection := Object clone do(
 
 					endRequest(req, appStatus, protocolStatus)
 
+					// mmm... close?
 					if((req flags & FCGI_KEEP_CONN) == 0, self close)
 				)
 			)
@@ -512,6 +513,7 @@ FCGIConnection := Object clone do(
 		resp write(self socket)
 
 		debugLine("[FCGI Connection] ... GET_VALUES")
+		self
 	)
 )
 
