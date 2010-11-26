@@ -49,9 +49,8 @@ Sequence unpack := method(format,
 			aux = format at(i + 1)
 		)
 
-		f = 0
 		item = Sequence clone
-		while(f < count,
+		count repeat(
 			aux = next + s itemSize
 			if(bigEndian and s itemSize > 1,
 				item appendSeq(self exSlice(next, aux) reverse)
@@ -59,7 +58,6 @@ Sequence unpack := method(format,
 				item appendSeq(self exSlice(next, aux))
 			)
 			next = aux
-			f = f + 1
 		)
 		item setEncoding("number") setItemType(it)
 		if(item size <= 1,
@@ -83,10 +81,13 @@ Sequence pack := method(format, //values
 	aux := nil
 	count := 0
 	res := self clone setItemType("uint8") setEncoding("number")
+	temp := Sequence clone setEncoding("number")
 
 	if(format at(0) asCharacter == "*", bigEndian = true ; i = 1)
 
 	while(i < format size and args size > 0,
+		if(args size <= 0, break)
+
 		arg = args pop
 		if(arg isNil, return Error with("Number of arguments differ from format specifier"))
 
@@ -104,9 +105,7 @@ Sequence pack := method(format, //values
 			aux = format at(i + 1)
 		)
 		
-		f = 0
-		temp := Sequence clone setEncoding("number")
-		while(f < count,
+		count repeat(f,
 			if(count == 1,
 				temp empty setItemType(it) atPut(0, arg) setItemType("uint8")
 			,
@@ -117,11 +116,9 @@ Sequence pack := method(format, //values
 			,
 				res appendSeq(temp)
 			)
-
-			f = f + 1
 		)
-		i = i + 1
 
+		i = i + 1
 	)
 
 	res
