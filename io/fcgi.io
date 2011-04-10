@@ -12,9 +12,6 @@
 omf
 */
 
-doRelativeFile("pack.io")
-
-
 File writef := method(self performWithArgList("write", call message argsEvaluatedIn(call sender)); self flush)
 
 initDebug := method(fileName,
@@ -57,10 +54,10 @@ FCGI_OVERLOADED		:=	2
 FCGI_UNKNOWN_ROLE	:=	3
 
 
-FCGIHeaderFormat := "*CCSSCC"
-FCGIBeginRequestBodyFormat := "*SCC5"
-FCGIEndRequestBodyFormat := "*ICC3"
-FCGIUnknownTypeBodyFormat := "*CC7"
+FCGIHeaderFormat := "*BBHHBB"
+FCGIBeginRequestBodyFormat := "*HB5B"
+FCGIEndRequestBodyFormat := "*IB3B"
+FCGIUnknownTypeBodyFormat := "*B7B"
 
 
 
@@ -387,7 +384,6 @@ FCGIConnection := Object clone do(
 
 	endRequest := method(req, appStatus, protocolStatus,
 		debugLine("[FCGI Connection] END_REQUEST ...")
-
 		endReqBody := Sequence clone pack(FCGIEndRequestBodyFormat, appStatus, protocolStatus)
 		endRec := FCGIRecord clone setVersion(FCGI_VERSION_1) setRecordType(FCGI_END_REQUEST) setRequestId(req id) setContentLength(endReqBody size) setPaddingLength(0) setContentData(endReqBody)
 		endRec write(self socket)
@@ -543,7 +539,7 @@ FCGIServer := Object clone do(
 
 		while(socket isError or socket isNil,
 			wait(0.1)
-			socket = Socket fromFd(FCGI_LISTENSOCK_FILENO, AddressFamily AF_UNIX)
+			socket = Socket fromFd(FCGI_LISTENSOCK_FILENO, Socket AF_UNIX)
 			if(socket isError,
 				debugLine(socket message)
 			,

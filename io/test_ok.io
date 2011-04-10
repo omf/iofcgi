@@ -13,8 +13,9 @@ wait(3)
 srv := FCGIServer clone do(
 
 	application := method(req,
-		debugLine(req asString)
-
+		//debugLine(req asString)
+	
+		req env keys sort foreach(k, debugLine(k .. "= " .. req env at(k)))
 		s := Sequence clone
 
 		if(req env at("REQUEST_METHOD") == "POST",
@@ -40,20 +41,18 @@ srv := FCGIServer clone do(
 		debugLine(s)
 		m := CGI parseString(s)
 
-
 		//wait(10)
 
 		req stdout write("Status: 200 OK\r\nContent-Type: text/html\r\n\r\n")
-		req stdout write("<html><head><title>testcgi</title></head><body>")
-		req stdout write("")
+		req stdout write("<html><head><title>testcgi</title></head><body>\r\n")
 
-		req env keys sort foreach(k, req stdout write(k .. "= " .. req env at(k) .. "<br>"))
+		req env keys sort foreach(k, wait(1);req stdout write(k .. "= " .. req env at(k) .. "<br>\r\n"))
 
-		req stdout write("<hr>")
-		req stdout write(s .. "<br>")
+		req stdout write("<hr>\r\n")
+		req stdout write(s .. "<br>\r\n")
 
-		req stdout write("<hr>")
-		m keys sort foreach(k, req stdout write(k .. "= " .. m at(k) .. "<br>"))
+		req stdout write("<hr>\r\n")
+		m keys sort foreach(k, req stdout write(k .. "= " .. m at(k) .. "<br>\r\n"))
 
 		req stdout write("</body></html>")
 		req stdout write("")
