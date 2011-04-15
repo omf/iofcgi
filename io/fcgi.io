@@ -2,8 +2,7 @@
  Io FastCGI
 
  TODO:
-	- Buffered streams
-	- EndRequests's FCGI_CANT_MPX_CONN, FCGI_OVERLOADED responses
+	- EndRequests's FCGI_OVERLOADED responses
 	- Run as CGI
 	- Run as server (with unix socket and tcp socket)
 	- Multiplexing
@@ -266,6 +265,11 @@ FCGIInputStream := Object clone do(
 FCGIOutputStream := Object clone do(
 
 	streamType ::= FCGI_STDOUT
+	
+	init := method(
+		self buffer := List clone
+		self
+	)
 
 	with := method(conn, req,
 		this := FCGIOutputStream clone
@@ -277,9 +281,20 @@ FCGIOutputStream := Object clone do(
 	write := method(data,
 		endRec := FCGIRecord clone setVersion(FCGI_VERSION_1) setRecordType(streamType) setRequestId(self req id) setContentLength(data size) setPaddingLength(0) setContentData(data)
 		endRec write(self connection socket)
+		self
 	)
 
+	writef := method(data,
+		self buffer append(data)
+		self
+	)
 
+	flush := method(
+		b := self buffer join
+		self buffer empty
+		self write(b)
+		self
+	)
 )
 
 FCGIRequest := Object clone do(
@@ -346,34 +361,19 @@ FCGIConnection := Object clone do(
 		debugLine("[FCGI Connection] reading ...")
 
 		rec := FCGIRecord clone read(self socket)
-		if(rec isError not,
-			debugLine("[FCGI Connection] exec'ing ...")
 
-			type := _commands at(rec recordType asString)
-			if(type isNil,
-				self unknownType(rec)
-			,
-				req := self performWithArgList(type, list(rec))
+		debugLine("[FCGI Connection] exec'ing ...")
 
-				if(req isKindOf(FCGIRequest),
-					appStatus := 0
-					protocolStatus := FCGI_REQUEST_COMPLETE
-
-					if(req role != FCGI_RESPONDER, protocolStatus = FCGI_UNKNOWN_ROLE, appStatus = req run)
-
-					endRequest(req, appStatus, protocolStatus)
-
-					// mmm... close?
-					if((req flags & FCGI_KEEP_CONN) == 0, self close)
-				)
-			)
-
-			debugLine("[FCGI Connection] ... exec'ed")
-
-			return self
+		type := _commands at(rec recordType asString)
+		if(type isNil,
+			self _unknownType(rec)
+		,
+			self performWithArgList(type, list(rec))
 		)
 
-		rec
+		debugLine("[FCGI Connection] ... exec'ed")
+
+		self
 	)
 
 	close := method(
@@ -382,7 +382,11 @@ FCGIConnection := Object clone do(
 		debugLine("[FCGI Connection] ... closed")
 	)
 
-	endRequest := method(req, appStatus, protocolStatus,
+	//------------------------------
+	//"private" slots
+	//------------------------------
+
+	_endRequest := method(req, appStatus, protocolStatus,
 		debugLine("[FCGI Connection] END_REQUEST ...")
 		endReqBody := Sequence clone pack(FCGIEndRequestBodyFormat, appStatus, protocolStatus)
 		endRec := FCGIRecord clone setVersion(FCGI_VERSION_1) setRecordType(FCGI_END_REQUEST) setRequestId(req id) setContentLength(endReqBody size) setPaddingLength(0) setContentData(endReqBody)
@@ -395,7 +399,7 @@ FCGIConnection := Object clone do(
 		self
 	)
 
-	unknownType := method(rec,
+	_unknownType := method(rec,
 		debugLine("[FCGI Connection] UNKNOWN ...")
 
 		unkBody := Sequence clone pack(FCGIUnknownTypeBodyFormat, rec recordType)
@@ -408,6 +412,21 @@ FCGIConnection := Object clone do(
 		self
 	)
 
+	_doRequest := method(req,
+		appStatus := 0
+		protocolStatus := FCGI_REQUEST_COMPLETE
+
+		if(req role != FCGI_RESPONDER,
+			protocolStatus = FCGI_UNKNOWN_ROLE
+		,
+			appStatus = req run
+		)
+
+		_endRequest(req, appStatus, protocolStatus)
+
+		// mmm... close?
+		if((req flags & FCGI_KEEP_CONN) == 0, self close)
+	)
 
 
 	_commands := Map with(FCGI_BEGIN_REQUEST asString, "_beginRequestCommand",
@@ -430,14 +449,18 @@ FCGIConnection := Object clone do(
 
 		debugLine("[FCGI Connection] ... new request: " .. req asString)
 
-		self requests atPut(req id asString, req)
+		if(self requests hasKey(req id asString) not,
+			self requests atPut(req id asString, req)
+		,
+			_endRequest(self requests at(rec requestId asString), 0, FCGI_CANT_MPX_CONN)
+		)
 		self
 	)
 
 	_abortRequestCommand := method(rec,
 		debugLine("[FCGI Connection] ABORT ...")
 
-		endRequest(self requests at(rec requestId asString), 0, FCGI_REQUEST_COMPLETE)
+		_endRequest(self requests at(rec requestId asString), 0, FCGI_REQUEST_COMPLETE)
 
 		debugLine("[FCGI Connection] ... ABORT")
 	)
@@ -462,7 +485,8 @@ FCGIConnection := Object clone do(
 
 				req env empty mergeInPlace(params)
 			,
-				return req
+				//return req
+				_doRequest(req)
 			)
 		)
 		debugLine("[FCGI Connection] ... PARAMS")

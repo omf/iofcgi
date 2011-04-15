@@ -43,21 +43,22 @@ srv := FCGIServer clone do(
 
 		//wait(10)
 
-		req stdout write("Status: 200 OK\r\nContent-Type: text/html\r\n\r\n")
-		req stdout write("<html><head><title>testcgi</title></head><body>\r\n")
+		req stdout writef("Status: 200 OK\r\nContent-Type: text/html\r\n\r\n")
+		req stdout writef("<html><head><title>testcgi</title></head><body>\r\n")
 
-		req env keys sort foreach(k, wait(1);req stdout write(k .. "= " .. req env at(k) .. "<br>\r\n"))
+		req env keys sort foreach(k, wait(0.2);req stdout writef(k .. "= " .. req env at(k) .. "<br>\r\n");req stdout flush)
 
-		req stdout write("<hr>\r\n")
-		req stdout write(s .. "<br>\r\n")
+		req stdout writef("<hr>\r\n")
+		req stdout writef(s .. "<br>\r\n")
 
-		req stdout write("<hr>\r\n")
-		m keys sort foreach(k, req stdout write(k .. "= " .. m at(k) .. "<br>\r\n"))
+		req stdout writef("<hr>\r\n")
+		m keys sort foreach(k, req stdout writef(k .. "= " .. m at(k) .. "<br>\r\n"))
 
-		req stdout write("</body></html>")
-		req stdout write("")
+		req stdout writef("</body></html>")
+		req stdout writef("")
+		req stdout flush
 
-		0
+		return 0
 	)
 
 )
