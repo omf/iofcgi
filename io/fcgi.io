@@ -386,13 +386,14 @@ FCGIConnection := Object clone do(
 	//"private" slots
 	//------------------------------
 
-	_endRequest := method(req, appStatus, protocolStatus,
+	_endRequest := method(req, appStatus, protocolStatus, remove,
 		debugLine("[FCGI Connection] END_REQUEST ...")
 		endReqBody := Sequence clone pack(FCGIEndRequestBodyFormat, appStatus, protocolStatus)
 		endRec := FCGIRecord clone setVersion(FCGI_VERSION_1) setRecordType(FCGI_END_REQUEST) setRequestId(req id) setContentLength(endReqBody size) setPaddingLength(0) setContentData(endReqBody)
 		endRec write(self socket)
 
-		self requests removeAt(req id asString)
+		if(remove isNil or remove isTrue,
+			self requests removeAt(req id asString)
 
 		debugLine("[FCGI Connection] ... END_REQUEST")
 
@@ -452,7 +453,7 @@ FCGIConnection := Object clone do(
 		if(self requests hasKey(req id asString) not,
 			self requests atPut(req id asString, req)
 		,
-			_endRequest(self requests at(rec requestId asString), 0, FCGI_CANT_MPX_CONN)
+			_endRequest(req, 0, FCGI_CANT_MPX_CONN, false)
 		)
 		self
 	)
