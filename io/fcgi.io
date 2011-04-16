@@ -391,7 +391,7 @@ FCGIConnection := Object clone do(
 		endRec := FCGIRecord clone setVersion(FCGI_VERSION_1) setRecordType(FCGI_END_REQUEST) setRequestId(req id) setContentLength(endReqBody size) setPaddingLength(0) setContentData(endReqBody)
 		endRec write(self socket)
 
-		if(remove isNil or remove isTrue,
+		if(remove isNil or remove,
 			self requests removeAt(req id asString)
 		)
 
