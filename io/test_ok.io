@@ -1,5 +1,7 @@
 #!/usr/local/bin/io
 
+Socket
+
 doRelativeFile("fcgi.io")
 
 //l := initDebug("/tmp/kk_" .. System thisProcessPid .. ".log")
@@ -7,8 +9,6 @@ l := initDebug("/tmp/kk.log")
 
 debugLine(System args size asString)
 debugLine(System args at(0))
-
-wait(3)
 
 srv := FCGIServer clone do(
 
@@ -46,7 +46,8 @@ srv := FCGIServer clone do(
 		req stdout writef("Status: 200 OK\r\nContent-Type: text/html\r\n\r\n")
 		req stdout writef("<html><head><title>testcgi</title></head><body>\r\n")
 
-		req env keys sort foreach(k, wait(0.2);req stdout writef(k .. "= " .. req env at(k) .. "<br>\r\n");req stdout flush)
+		req env keys sort foreach(k, req stdout writef(k .. "= " .. req env at(k) .. "<br>\r\n"))
+		req stdout flush
 
 		req stdout writef("<hr>\r\n")
 		req stdout writef(s .. "<br>\r\n")
@@ -63,6 +64,7 @@ srv := FCGIServer clone do(
 
 )
 
-srv run
-
+//srv run
+//srv run(IPAddress clone setIp("127.0.0.1") setPort(8888))
+srv run(UnixPath clone setPath("/tmp/test-socket"))
 

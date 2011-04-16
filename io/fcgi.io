@@ -4,7 +4,6 @@
  TODO:
 	- EndRequests's FCGI_OVERLOADED responses
 	- Run as CGI
-	- Run as server (with unix socket and tcp socket)
 	- Multiplexing
 	- Testing
 
@@ -394,6 +393,7 @@ FCGIConnection := Object clone do(
 
 		if(remove isNil or remove isTrue,
 			self requests removeAt(req id asString)
+		)
 
 		debugLine("[FCGI Connection] ... END_REQUEST")
 
@@ -555,23 +555,32 @@ FCGIServer := Object clone do(
 	isMultiplexed := method(params at("FCGI_MPXS_CONNS"))
 	setMultiplexed := method(self)
 
-	application := method(request, "Must provide an application(request) method to be executed by the server!!" ; exit )
+	timeToRun ::= 3
+	
+	application := method(request, "Must provide an application(request) method to be executed by the server!!")
 
-	run := method(
+	run := method(address,
+		wait(self timeToRun)
+		
 		debugLine("[FCGI Server] running ...")
 
 		socket := nil
 
-		while(socket isError or socket isNil,
-			wait(0.1)
-			socket = Socket fromFd(FCGI_LISTENSOCK_FILENO, Socket AF_UNIX)
-			if(socket isError,
-				debugLine(socket message)
-			,
-				break
+		if(address isNil,
+			while(socket isError or socket isNil,
+				wait(0.1)
+				socket = Socket fromFd(FCGI_LISTENSOCK_FILENO, Socket AF_UNIX)
+				if(socket isError,
+					debugLine(socket message)
+				,
+					break
+				)
 			)
+		,
+			socket = Socket clone setAddress(address)
+			socket serverOpen returnIfError
 		)
-
+		
 		debugLine(socket isOpen asString)
 
 		newSocket := nil
@@ -590,7 +599,7 @@ FCGIServer := Object clone do(
 			conn := FCGIConnection with(newSocket, self)
 
 			//go, go, go!!!!
-			conn @run
+			conn @@run
 		)
 	)
 )
