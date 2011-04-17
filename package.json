@@ -1,0 +1,12 @@
+{
+  "name": "FCGI",
+  "version": 0.1,
+  "description": "FastCGI for Io",
+  "author": "Oscar Martinez",
+  "readme": "README",
+  "website": "http://github.com/omf/FCGI",
+  "categories": ["networking"],
+  "protos": ["FCGIException","FCGIRecord","FCGIInputStream","FCGIOutputStream","FCGIRequest","FCGIConnection","FCGIServer"],
+  "dependencies": {
+  }
+}
