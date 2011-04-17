@@ -9,14 +9,16 @@
 
 omf
 */
+Protos Addons FCGI FCGI := Protos Addons FCGI
 
-File writef := method(self performWithArgList("write", call message argsEvaluatedIn(call sender)); self flush)
+Socket
 
+debugFile := nil
 initDebug := method(fileName,
-	File with(fileName) remove openForAppending
+	debugFile = File with(fileName) remove openForAppending
+	debugFile writef := method(self performWithArgList("write", call message argsEvaluatedIn(call sender)); self flush)
 )
-
-debugLine := method(seq, l writef(seq asString .. "\n") )
+debugLine := method(seq, debugFile ?writef(seq asString .. "\n") )
 
 
 FCGI_LISTENSOCK_FILENO	:=	0

@@ -1,11 +1,8 @@
 #!/usr/local/bin/io
 
-Socket
+FCGI
 
-doRelativeFile("../FCGI.io")
-
-//l := initDebug("/tmp/kk_" .. System thisProcessPid .. ".log")
-l := initDebug("/tmp/kk.log")
+initDebug("/tmp/kk.log")
 
 debugLine(System args size asString)
 debugLine(System args at(0))
@@ -64,7 +61,7 @@ srv := FCGIServer clone do(
 
 )
 
-//srv run
+srv run
 //srv run(IPAddress clone setIp("127.0.0.1") setPort(8888))
-srv run(UnixPath clone setPath("/tmp/test-socket"))
+//srv run(UnixPath clone setPath("/tmp/test-socket"))
 
