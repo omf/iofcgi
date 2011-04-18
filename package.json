@@ -4,7 +4,7 @@
   "description": "FastCGI for Io",
   "author": "Oscar Martinez",
   "readme": "README",
-  "website": "http://github.com/omf/FCGI",
+  "website": "http://github.com/omf/iofcgi",
   "categories": ["networking"],
   "protos": ["FCGIException","FCGIRecord","FCGIInputStream","FCGIOutputStream","FCGIRequest","FCGIConnection","FCGIServer"],
   "dependencies": {
